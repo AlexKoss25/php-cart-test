@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types = 1);
+declare(strict_types=1);
 
 namespace Raketa\BackendTestTask\Controller;
 
@@ -11,25 +11,37 @@ use Raketa\BackendTestTask\View\ProductsView;
 readonly class GetProductsController
 {
     public function __construct(
-        private ProductsView $productsVew
+        private ProductsView $productsView
     ) {
     }
 
+    /**
+     * Получение списка товаров по категории.
+     * Передача категории через query param: ?category=...
+     * Базовая валидация запроса предполагается фреймворком.
+     */
     public function get(RequestInterface $request): ResponseInterface
     {
         $response = new JsonResponse();
 
-        $rawRequest = json_decode($request->getBody()->getContents(), true);
+        try {
+            $query = method_exists($request, 'getQueryParams') ? $request->getQueryParams() : [];
+            $category = $query['category'] ?? null;
 
-        $response->getBody()->write(
-            json_encode(
-                $this->productsVew->toArray($rawRequest['category']),
-                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES
-            )
-        );
+            if (!$category) {
+                $response = $response->withStatus(400);
+                $response->getBody()->write(json_encode(['error' => 'Category required']));
+                return $response;
+            }
 
-        return $response
-            ->withHeader('Content-Type', 'application/json; charset=utf-8')
-            ->withStatus(200);
+            $data = $this->productsView->toArray($category);
+            $response->getBody()->write(json_encode($data));
+            return $response->withStatus(200);
+        } catch (\Throwable $e) {
+            // логирование абстрагируемся
+            $response = $response->withStatus(500);
+            $response->getBody()->write(json_encode(['error' => 'Internal server error']));
+            return $response;
+        }
     }
 }

@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types = 1);
+declare(strict_types=1);
 
 namespace Raketa\BackendTestTask\Repository;
 
@@ -11,7 +11,8 @@ use Raketa\BackendTestTask\Infrastructure\ConnectorFacade;
 
 class CartManager extends ConnectorFacade
 {
-    public $logger;
+    // logger может быть установлен через setLogger, или задан извне
+    public ?LoggerInterface $logger = null;
 
     public function __construct($host, $port, $password)
     {
@@ -19,34 +20,51 @@ class CartManager extends ConnectorFacade
         parent::build();
     }
 
-    public function setLogger(LoggerInterface $logger)
+    public function setLogger(LoggerInterface $logger): void
     {
         $this->logger = $logger;
     }
 
     /**
-     * @inheritdoc
+     * Сохраняет корзину под ключом session_id()
+     * CartManager отвечает за работу с TTL (через Connector::set)
      */
-    public function saveCart(Cart $cart)
+    public function saveCart(Cart $cart): void
     {
         try {
-            $this->connector->set($cart, session_id());
+            $key = session_id() ?: (string)($cart->getUuid() ?? '');
+            $this->connector->set($key, $cart);
         } catch (Exception $e) {
-            $this->logger->error('Error');
+            if ($this->logger) {
+                try {
+                    $this->logger->error('Cart save error: ' . $e->getMessage(), ['exception' => $e]);
+                } catch (\Throwable $ignore) {
+                }
+            }
+            // по условию не выбрасываем дальше — инфра отвечает за retry/alerting
         }
     }
 
     /**
-     * @return ?Cart
+     * Возвращает Cart или пустую Cart если не найден/ошибка.
      */
-    public function getCart()
+    public function getCart(): Cart
     {
         try {
-            return $this->connector->get(session_id());
+            $key = session_id();
+            $cart = $this->connector->get($key);
+            if (!$cart) {
+                return new Cart($key ?? '', []);
+            }
+            return $cart;
         } catch (Exception $e) {
-            $this->logger->error('Error');
+            if ($this->logger) {
+                try {
+                    $this->logger->error('Cart get error: ' . $e->getMessage(), ['exception' => $e]);
+                } catch (\Throwable $ignore) {
+                }
+            }
+            return new Cart(session_id() ?: '', []);
         }
-
-        return new Cart(session_id(), []);
     }
 }

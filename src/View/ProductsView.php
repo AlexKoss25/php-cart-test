@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Raketa\BackendTestTask\View;
 
 use Raketa\BackendTestTask\Repository\Entity\Product;
@@ -12,6 +14,9 @@ readonly class ProductsView
     ) {
     }
 
+    /**
+     * @return array<int, array<string,mixed>>
+     */
     public function toArray(string $category): array
     {
         return array_map(
